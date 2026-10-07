@@ -1,0 +1,493 @@
+{
+  "name": "Meridian",
+  "tagline": "Map-first Southeast Asia travel planner for travellers departing from Singapore",
+  "status": "V1 — working end to end. Twelve destinations including Malaysia, five loyalty programmes, Xiaohongshu-only guide import with text + image analysis, 我的行程 as a persistent first-class entity, and photography for two destinations (Bali, Phu Quoc). No live data.",
+  "productThesis": "An interactive geographic decision-making tool that helps Singapore-based travellers decide where to go, where to stay, what to do, and how to arrange those places into an efficient trip. The map is the product; the itinerary is built around the map.",
+  "repository": {
+    "runtimeDependencies": [
+      "maplibre-gl",
+      "next",
+      "react",
+      "react-dom",
+      "zustand"
+    ],
+    "language": "TypeScript",
+    "framework": "Next.js 15 App Router / React 19",
+    "styling": "Tailwind CSS 3 with CSS custom properties as design tokens",
+    "state": "Zustand with persist middleware (localStorage), manual hydration",
+    "tests": "Custom Playwright-driven end-to-end suite (scripts/e2e.mjs)",
+    "dataValidation": "scripts/validate-data.ts (tsx)"
+  },
+  "mapEngine": {
+    "library": "MapLibre GL JS",
+    "tiles": "vector",
+    "styleAuthoredInRepo": "components/map/basemap-style.ts",
+    "primaryTileHost": {
+      "id": "carto",
+      "product": "carto.streets vector tiles",
+      "cost": "free, no API key, CORS open"
+    },
+    "fallbackTileHost": {
+      "id": "openfreemap",
+      "product": "OpenFreeMap planet tiles",
+      "cost": "free, no API key, no limits"
+    },
+    "whyVectorNotRaster": "Raster tiles bake labels into pixels. Vector tiles allow cutting the label set to country/region/city/town, forcing English, and applying the product's own palette.",
+    "labelPolicy": "No villages, suburbs, hamlets, POIs, road names, house numbers or waterway names. Base city labels start at zoom 6.",
+    "knownConstraint": "MapLibre's web worker is resolved via import.meta.url, which a bundler cannot follow. scripts/vendor-maplibre-worker.mjs vendors it into public/ before dev and build."
+  },
+  "routing": {
+    "primary": "OSRM (real road geometry, road distance, drive duration)",
+    "fallback": "Geodesic estimator with a documented speed model",
+    "abstraction": "lib/routing — distance and travel time are separate fields and never conflated",
+    "trafficModel": "none"
+  },
+  "dataScope": {
+    "destinations": 12,
+    "areas": 145,
+    "loyaltyHotels": 121,
+    "places": 526,
+    "placesWithApproximateCoordinates": 32,
+    "note": "Twelve destinations, all reference tier. Malaysia (Penang, Kuala Lumpur) added; Chinese coverage is complete across every destination, with nameZh omitted only where a name has no form in real Chinese use."
+  },
+  "correctionsFoundDuringVerification": [
+    "Bali has only five Hilton-branded hotels; a DoubleTree in the first draft does not exist and was removed",
+    "Siem Reap's airport code is SAI, not REP (REP closed October 2023)",
+    "Phnom Penh moved to Techo International (KTI) in September 2025",
+    "El Nido's IATA code is ENI; LIO is only the local airstrip name",
+    "Le Meridien Angkor is closed but still marketed as open by the brand",
+    "Four Points by Sheraton Palawan is in Sabang, ~2 hours from Puerto Princesa city",
+    "Four Points by Sheraton Bali, Ungasan was in the product twice, under two ids and two Marriott property codes (DPSFG and DPSFP). Only DPSFG is real; the duplicate is deleted, and the validator now fails on two hotels plotted within 150 m of each other in the same destination"
+  ],
+  "bugsFoundByTesting": [
+    "Fixed region bounds excluded Bali, leaving a destination off-screen — bounds are now derived from the data",
+    "minZoom clamped the mobile fit and pushed the Singapore origin off the left edge",
+    "Marker z-index escaped the map stacking context and floated above the mobile bottom sheet",
+    "A 3.5% fill on inactive areas compounded across 10+ overlapping areas into a grey veil over the planning map",
+    "Area labels repeated 4-5 times because they were placed from large polygons instead of a one-point-per-area source",
+    "MapLibre's worker failed to load under the bundler, leaving a blank canvas with no error"
+  ],
+  "testResults": {
+    "typecheck": "tsc --noEmit clean",
+    "dataValidation": "passes: 0 errors, 145 areas / 121 hotels / 526 places",
+    "coordinateAudit": "784 coordinates, 0 failures, 37 expected warnings",
+    "socialImport": {
+      "checks": 224,
+      "passed": 224
+    },
+    "e2e": {
+      "checks": 196,
+      "passed": 196,
+      "consoleErrors": 0,
+      "note": "the full V1 workflow plus a condensed My Trips pass"
+    },
+    "productionBuild": "passes; 12 destinations pre-rendered",
+    "tripAccommodation": {
+      "checks": 128,
+      "passed": 128,
+      "command": "npm run test:trip"
+    },
+    "myTripsAcceptance": {
+      "checks": 42,
+      "passed": 42,
+      "command": "npm run test:trips",
+      "note": "the 15-step My Trips acceptance scenario driven through the real UI at 1440x900, zero console errors"
+    },
+    "planPanelSpace": {
+      "checks": 28,
+      "passed": 28,
+      "command": "node scripts/check-plan-space.mjs",
+      "note": "builds the 3-hotel/4-day trip through the UI and measures the panel at 1440x900"
+    },
+    "imageManifests": {
+      "checks": 110,
+      "passed": 110,
+      "command": "npm run test:images",
+      "note": "files on disk, attribution, one hero per subject, no orphans, no non-commercial licences, no key shared by two destinations"
+    },
+    "imageRendering": {
+      "checks": 10,
+      "passed": 10,
+      "command": "npm run check:images-ui -- --destination phu-quoc",
+      "note": "real browser; also run against bali after the merge, 10/10"
+    }
+  },
+  "knownLimitations": [
+    "Accommodation is a stay, not a booking: no confirmation number, no room type, no rate.",
+    "A hotel-change day is routed sensibly but ACTIVITIES are not yet reordered around it. The data model supports that optimisation; the optimiser is not built.",
+    "Arrival and departure anchors use the airport item already on the day. Origin -> airport -> hotel is expressible and not yet computed.",
+    "Five loyalty programmes, not every programme: Accor Live Limitless and Wyndham Rewards are absent rather than half-populated.",
+    "Photography did not grow with the data; new records show the no-photograph state rather than borrowing a neighbour image.",
+    "Imported guides, saved places, trips and images live in one browser; there are no accounts.",
+    "No prices anywhere — hotel cost is a positioning tier with its basis displayed."
+  ],
+  "documents": {
+    "process": "/docs/PROCESS.md",
+    "readme": "/docs/README.md",
+    "roadmap": "/docs/ROADMAP.md",
+    "browsableDossier": "/process",
+    "dossierLines": "PROCESS.md documents every iteration: the destination redesign, the origin model, the Xiaohongshu import, and the ten-destination data expansion."
+  },
+  "destinationExperience": {
+    "navigation": [
+      "EXPLORE",
+      "STAY",
+      "DO",
+      "PLAN"
+    ],
+    "defaultTab": "explore",
+    "defaultView": "whole island of Bali",
+    "mapDiscipline": "one layer per tab; the camera re-frames per tab",
+    "areas": "six headline regions with authored taglines, drawn as native two-line map labels"
+  },
+  "imagery": {
+    "provider": "Wikimedia Commons + Openverse",
+    "architecture": "lib/images — components request by (entityKind, entityId) and never construct a URL; lib/data/images merges one manifest per destination",
+    "images": 188,
+    "perDestination": {
+      "bali": {
+        "images": 134,
+        "subjects": 60,
+        "areas": "15/15",
+        "hotels": "4/38",
+        "places": "41/144"
+      },
+      "phu-quoc": {
+        "images": 54,
+        "subjects": 27,
+        "areas": "7/13",
+        "hotels": "2/7",
+        "places": "18/37"
+      }
+    },
+    "fields": [
+      "url",
+      "alt",
+      "role",
+      "subject",
+      "depicts",
+      "source.license",
+      "source.author",
+      "source.pageUrl"
+    ],
+    "honestyMechanism": "A property only has images verified to be THAT property, by Commons category membership or by its name plus a locality word in the file title. A property with nothing verified says 暂无该酒店实拍照片 and never borrows its area's photograph. Licences are limited to those permitting commercial use.",
+    "verificationGates": [
+      "REQUIRE_LOCALITY — a per-destination regex every candidate must satisfy",
+      "SUBJECT_RULES — per-subject mustMatch naming the subject, plus rejects",
+      "HOTEL_TITLE_RULES — the file must name the property AND somewhere on the island",
+      "HOTEL_TITLE_REJECT — names that belong to another city or another property",
+      "ownName — opt-out of the locality gate, only where the name is unique to the destination"
+    ],
+    "pipeline": "scripts/fetch-destination-images.mjs --destination <id>, subjects in scripts/images/subjects/<id>.mjs",
+    "regenerate": "npm run images:resolve -- --destination <id> && npm run images:download -- --destination <id>",
+    "notVerified": "No human has looked at these photographs — the pass that added them ran on a model with no image input, so DEPICTS_OVERRIDE is empty and every choice is title-and-category verified."
+  },
+  "transport": {
+    "abstraction": "TransportLeg with mode, rationale, alternatives, distance, duration, geometry, source, confidence, multimodal",
+    "routingProviders": {
+      "default": "OSRM (client-side, free, keyless)",
+      "serverOnly": [
+        "OpenRouteService",
+        "Mapbox Directions",
+        "Google Routes"
+      ],
+      "serverProxy": "app/api/route/route.ts — API keys never reach the browser"
+    },
+    "recommendation": "lib/transport/recommend.ts — separate from routing; states its reasoning in the UI",
+    "fabricationPolicy": "a route result cannot carry a number unless a provider produced one; unanswered legs render as \"Route unavailable\"",
+    "waterCrossings": "modelled as curated data, so Ubud to Nusa Penida renders as a two-mode leg via Sanur Harbour"
+  },
+  "photography": {
+    "provider": "lib/images — components ask by (entityKind, entityId) and never hold a URL",
+    "sources": [
+      "Wikimedia Commons",
+      "Openverse (Flickr and other CC repositories)"
+    ],
+    "manifest": "lib/data/images/bali-images.ts, generated by scripts/fetch-bali-images.mjs",
+    "images": 134,
+    "subjects": 60,
+    "licencePolicy": "commercial use only — CC BY, CC BY-SA, CC0 and public domain. No NC, no ND.",
+    "attribution": "author, licence and source page ship on every image and render on cards and detail views",
+    "hotelRule": "a hotel photo is used only if the file title names the property AND the right part of Bali, or the file sits in the property's own Commons category. A hotel with no verified photography has no entry and shows \"No property photography available\" — it never borrows its area photo.",
+    "baliHotelsWithPropertyPhotography": 4,
+    "baliHotelsTotal": 20,
+    "linkChecked": "every candidate is fetched before it is written into the manifest; sources that have since been deleted are dropped rather than shipped as a 404",
+    "signagePolicy": "Photographs of a hotel's name on a wall are excluded: correctly licensed and provably of the property, but not property photography. The generator logs each exclusion.",
+    "generatorIdCheck": "npm run validate:data fails if any manifest key is not a real entity, or if the generator's own id list names something the dataset does not contain"
+  },
+  "travelZones": {
+    "what": "approximate travel extents derived from each area's own mapped hotels and places",
+    "geometry": "convex hull of the area content, offset outward, smoothed",
+    "rendering": "tinted wash + fine dashed edge (dashed = approximate). Inserted below the basemap water layer so zones clip to land.",
+    "notAdminBoundaries": true,
+    "whyNotCircles": "a radial envelope around a centroid degenerates into a circle when content is sparse, which is exactly the crude radius appearance this replaced",
+    "hierarchy": "EXPLORE draws one scope at a time (nine stay bases OR six day-trip zones), shared with the panel through the UI store"
+  },
+  "transportLegs": {
+    "format": "mode · estimated duration · distance, then rationale, then source badge",
+    "sourceBadge": "names the routing engine, or says \"No route data\"",
+    "traffic": "not modelled — measured legs are labelled free-flow estimates",
+    "unavailable": "legs with no route data show no duration at all and the day clock is marked approx"
+  },
+  "languages": {
+    "primary": "zh-CN",
+    "secondary": "en",
+    "architecture": "lib/i18n — a 546-key catalogue. zhCN is authored first; en is typed as Record<keyof typeof zhCN, string>, so a missing translation is a compile error.",
+    "properNouns": "Stored twice. nameZh sits beside the canonical name and both are shown, because a traveller reads 乌鲁瓦图神庙 and then types \"Uluwatu Temple\" into Grab. nameZh is omitted where no Chinese name is genuinely in use (29 of 145 Bali places).",
+    "copyStyle": "Written as Chinese, not translated from the English. Different text for the same reader, shorter.",
+    "whereTheLocaleLives": "The persisted UI store, not a cookie — the site is statically exported and must not read request state.",
+    "overlay": "lib/data/zh/bali-zh.ts. Chinese copy is merged by the registry so the hand-verified geography files are never touched by a translation pass."
+  },
+  "research": {
+    "purpose": "Turn a Xiaohongshu post — its text AND its images — into structured places on the traveller's map, and from there into an itinerary.",
+    "coreProductMoment": "把这篇文章直接变成一张可编辑的旅行地图。",
+    "supportedSources": {
+      "v1": [
+        "xiaohongshu"
+      ],
+      "whyOneValue": "SocialPlatform is a ONE-value union on purpose. A nine-value union is a standing invitation for a second platform to arrive by accident; a one-value union makes the next source a deliberate change to the union, a provider and a copy pass.",
+      "refused": [
+        "tiktok",
+        "instagram",
+        "douyin",
+        "youtube",
+        "bilibili",
+        "generic blog"
+      ],
+      "refusalUx": "A link to another platform is refused by name: 这看起来不是小红书链接。V1 只支持小红书…"
+    },
+    "retrieval": {
+      "approach": "A single polite request to an approved retrieval provider, server-side, only when XIAOHONGSHU_RETRIEVAL_ENDPOINT is configured.",
+      "never": [
+        "log in",
+        "use or store a session/cookie",
+        "solve or bypass a CAPTCHA or signature",
+        "rotate user agents, proxies or fingerprints",
+        "touch private or followers-only content",
+        "run a headless browser",
+        "retry a 401/403/429"
+      ],
+      "refusalIsFinal": "A provider refusal is reported as `unavailable` and is not retried. The platform said no; the traveller keeps working by pasting text or uploading screenshots.",
+      "imageRelay": "GET /api/import/xiaohongshu/image — one url per request, allowlisted CDN hosts, 8MB ceiling, image-only content type, private no-store. It is a relay, not an open proxy.",
+      "fallback": "暂时无法直接读取这篇小红书。你仍然可以上传/粘贴内容继续整理。",
+      "fallbackIsOfflineByDefault": "NEXT_PUBLIC_XHS_RETRIEVAL defaults to 0, so with no provider configured the panel shows the fallback immediately instead of making a request guaranteed to 404."
+    },
+    "analysis": {
+      "abstraction": "lib/research/analyzer.ts — one GuideAnalyzer interface, two implementations, identical result shape",
+      "providers": {
+        "heuristic": "Default. Browser. No key. Reads the text with the rule-based extractor; marks images `unsupported` and says so rather than guessing from a filename.",
+        "multimodal": "Server, via /api/analyze-guide. Reads text plus downscaled images, four per batch. OpenAI-compatible endpoints, OpenAI or Anthropic."
+      },
+      "imageRoles": [
+        "shopfronts",
+        "signs",
+        "menus",
+        "branding",
+        "Chinese and English labels",
+        "maps",
+        "annotated screenshots",
+        "scene context",
+        "image sequence"
+      ],
+      "notOcrOnly": "The prompt reads visible text, branding and scene, and relates a sequence of frames to the post text.",
+      "merging": "mergeFindings collapses detections of the same place across text and images into ONE candidate with detectedFromText and the union of detectedFromImageIds (§24). Different spellings are left separate — that judgement belongs to the matcher, which has the corpus and the alias table.",
+      "lowConfidence": "An image-only finding below IMAGE_PROPOSAL_FLOOR (0.6) is NOT turned into a place candidate. The image goes to the unassigned tray instead, where it reads as a question rather than an answer (§26)."
+    },
+    "placeResolution": {
+      "order": [
+        "Meridian canonical dataset",
+        "alias table",
+        "external place search",
+        "manual map pin"
+      ],
+      "why": "Each step is strictly more expensive and less trustworthy than the one before, so the order is correctness rather than convenience.",
+      "modelNeverSuppliesCoordinates": "Stated in the system prompt, absent from the pipeline's types, and visible in the UI. A model that has never seen Bali cannot place a beach club, and a plausible wrong latitude would corrupt an itinerary with a stop that does not exist.",
+      "externalHitIsAQuestion": "An external hit is offered, never auto-accepted. Confirming one saves a UserPlaceSubmission the traveller owns, pending review — because 'a map search found this name' and 'Meridian knows this place' are different claims.",
+      "manualPin": "The traveller clicks the map; the coordinate is theirs. The place is a UserPlaceSubmission, never canonical."
+    },
+    "imageAssignment": {
+      "coreRequirement": true,
+      "model": "ImagePlaceAssignment { imageId, candidateId, source: 'suggested' | 'user' }",
+      "humanWins": "A re-analysis only ever replaces `suggested` rows, so a user correction survives it (§33).",
+      "oneImageOnePlace": "Reassigning MOVES an image rather than copying it, so a picture cannot render under two cards or make the unassigned count lie.",
+      "unassignedTray": "未分配图片 — every image attached to no place, tappable to attach, create from, or leave for later (§17).",
+      "fromImage": "「这张图是什么地方？」 → attach to a known place, search Meridian, or create a place with a map-pinned coordinate (§18)."
+    },
+    "images": {
+      "storage": "IndexedDB (meridian.images.v1), never localStorage: one base64 screenshot would blow the ~5MB quota and take the traveller's itinerary down with it.",
+      "threeSizes": {
+        "thumb": "320px, lists only — a review screen with twenty cards must not decode twenty 1600px bitmaps",
+        "stored": "1600px, what the traveller looks at",
+        "analysis": "1024px, generated on demand and never persisted; sized so signage survives the downscale"
+      },
+      "dedupe": "SHA-256 of the STORED bytes, so re-uploading the same screenshot costs one record and one set of bytes.",
+      "deletedWithTheImport": "deleteImport purges the text, candidates, analyses, assignments AND the image bytes."
+    },
+    "privacy": {
+      "boundary": "An imported image is `private_import`, written by the only function that can create an image record — buildImageRecord in lib/research/image-rules.ts — which has no parameter for visibility.",
+      "neverPublic": "No code path promotes an imported picture to canonical photography, hotel gallery or community image (§20).",
+      "futureContribution": "`user_contributed` exists for §21's own-photo-with-consent flow and is unreachable from every import path.",
+      "savedPlaceSplit": "A saved place shows canonical photography and, under a separate heading, 来自你的攻略（只有你能看到） (§22, §23).",
+      "copyright": "No creator text or imagery is republished. At most one short sentence is quoted as the reason a name was extracted."
+    },
+    "costControls": {
+      "images": {
+        "perImport": 20,
+        "perFileBytes": 12582912,
+        "importBytes": 41943040
+      },
+      "analysis": {
+        "batchSize": 4,
+        "maxEdge": 1024,
+        "cachedBy": "content hash + analysis version"
+      },
+      "externalSearch": {
+        "defaultOff": true,
+        "onlyAfterMeridianFails": true,
+        "fieldMask": "places.id,places.displayName,places.formattedAddress,places.location,places.primaryType",
+        "neverRequests": [
+          "rating",
+          "photos",
+          "openingHours",
+          "reviews",
+          "priceLevel",
+          "internationalPhoneNumber"
+        ],
+        "cacheTtlDays": 90,
+        "cacheMaxEntries": 400
+      }
+    },
+    "endpoints": {
+      "retrieval": "POST /api/import/xiaohongshu",
+      "retrievalImages": "GET /api/import/xiaohongshu/image",
+      "analysis": "POST /api/analyze-guide",
+      "resolution": "POST /api/resolve-place"
+    },
+    "apiKeySecurity": "No browser-side module reads an API key, asserted by a test that reads the sources. Every secret is read in a route handler, and on the static GitHub Pages build none of those routes are deployed.",
+    "placeholderTypes": [
+      "restaurant",
+      "cafe",
+      "beachclub",
+      "bar",
+      "beach",
+      "nature",
+      "culture",
+      "activity",
+      "hotel",
+      "shopping",
+      "wellness",
+      "area",
+      "transport",
+      "unknown"
+    ]
+  },
+  "coordinateSourcing": {
+    "method": "scripts/geocode-pois.mjs resolves placeholder coordinates against Nominatim (OpenStreetMap) and records the OSM element in coordNote.",
+    "why": "The datasets were authored by name. Asking a language model for latitudes produces plausible numbers that are wrong often enough to matter.",
+    "resolved": "94 of 100 new POIs",
+    "rejected": "Anything outside Bali, or more than 15 km from the area it claims to be in, is rejected and reported for a human.",
+    "unresolved": "Six places are not in OSM. They keep confidence \"demo\" and are excluded from the map and from itineraries; their cards say 位置未核实."
+  },
+  "origins": {
+    "model": "OriginCity is a first-class entity with a list of airports. One city is not one airport: Shanghai has PVG and SHA, Beijing PEK and PKX, Chengdu CTU and TFU, Bangkok BKK and DMK.",
+    "cities": 11,
+    "airports": 16,
+    "regions": [
+      "singapore",
+      "greater-bay",
+      "yangtze-delta",
+      "china-other",
+      "southeast-asia"
+    ],
+    "list": [
+      "Singapore",
+      "Guangzhou",
+      "Shenzhen",
+      "Hong Kong",
+      "Shanghai",
+      "Hangzhou",
+      "Beijing",
+      "Chengdu",
+      "Bangkok",
+      "Kuala Lumpur",
+      "Jakarta"
+    ],
+    "coordinates": "All 16 airports and every city centre resolved against OpenStreetMap via Nominatim; scripts/verify-origins.mjs re-checks the dataset.",
+    "chinaIsAnOriginMarket": "China is an origin market only. There are no Chinese destinations, deliberately — mixing the two would turn a focused origin upgrade into an unbounded content project.",
+    "persistence": "Its own store (lib/store/origin-store.ts) with its own storage key, because \"I live in Guangzhou\" belongs to a person, not to a trip. Replacing localStorage with a user profile touches one file.",
+    "nearbyAirports": "nearbyOriginIds is populated and surfaced as a hint; nothing acts on it yet. Architecture for 考虑附近机场 without the optimisation."
+  },
+  "connections": {
+    "abstraction": "OriginDestinationConnection. Whether a route is non-stop is a property of an (origin, destination) PAIR, not of the destination airport.",
+    "directAvailable": "boolean | null, and null means UNKNOWN — not \"no\". A pair with no record renders 航班信息待确认 and shows no duration at all.",
+    "verified": 10,
+    "approximate": 64,
+    "unknown": 36,
+    "harvestedFromDestinationData": "Singapore's connections are extracted at load from the destination files, keeping the cited sources (airline timetables, news reports, checked block times) attached to the data they describe.",
+    "weekendSuitability": "Curated per pair, never derived from distance. Singapore → Bali is not-ideal; Bangkok → Siem Reap is good.",
+    "refresh": "Every record carries source and verifiedAt so it can be re-checked. Nothing refreshes automatically yet."
+  },
+  "tripModel": {
+    "stays": "TripStay { hotelPlaceId, checkInDate, checkOutDate } — accommodation is a stay over a date range, not a hotel row repeated on each day. checkOutDate is exclusive.",
+    "derivedAnchors": "DayAnchors { start, end, isHotelChange, missingAccommodation } are DERIVED from the stays on every render and never stored, so editing a stay or a trip date moves every affected day with no invalidation.",
+    "nightRule": "start = the stay covering LAST night; end = the stay covering tonight. A hotel-change day therefore falls out of the data rather than being declared.",
+    "routing": "startAnchor -> ordered items -> endAnchor, through the existing routing provider. The hotel-to-hotel leg on a change day is MEASURED like any other drive, not asserted as metadata.",
+    "arrivalDeparture": "An airport item already present on the day becomes the start anchor on an arrival day and the end anchor on a departure day, so origin -> airport -> hotel is expressible without a second model. No live flight integration.",
+    "startTime": "Trip default (defaultStartTime, 09:00) with a per-day override (day.startTime).",
+    "fixedTime": "ItineraryItem.fixedTime is a BOOKING. The schedule reports usable waiting time when it arrives early and a conflict when it arrives late; it never moves the time.",
+    "migration": "Hotels stored as itinerary rows convert to stays ONLY when the same hotel repeats on two or more consecutive days. A single row is ambiguous and is preserved exactly as it was. Idempotent. Both stay and start-time migrations are idempotent.",
+    "separation": "Place (canonical) / TripStay (a booking) / ItineraryItem (a visit) / DayAnchor (derived) / TransportLeg (a route) are five separate concepts and none is a copy of another.",
+    "identity": "A trip is a persistent entity with a stable id, a list at /trips and a detail page at /trips/detail/?id=. The planner is one of its doors, not its home. Ids are created at runtime, so the detail page uses a query parameter inside a Suspense boundary — a static export cannot prerender /trips/[id].",
+    "editable": "Trip dates and travellers; each stay's hotel and nights; each day's start time; each stop's order, day and fixed time — all edited in place on the page that reads them.",
+    "planPanelAccommodation": "In PLAN the accommodation is a one-or-two line summary — `3 家住宿 · 2 次换酒店` plus the hotel chain, or `🏨 W Bali · 3 晚` for a single hotel — with the existing editor behind 修改/完成. No hotel select or date input exists outside edit mode. Unbooked nights and impossible dates stay visible while collapsed. The open/closed choice lives in sessionStorage, and switching day closes it. Measured at 1440x900 on a 3-hotel/4-day trip: 415px -> 71px, visible itinerary window ~90px -> 443px.",
+    "reschedule": "Days are re-derived BY DATE, not by index, so editing an end date keeps every stay, per-day start time and stop that still falls inside the new range.",
+    "duplicate": "Duplicate copies days, stops and stays with NEW stay ids — sharing ids would make the copy and the original the same accommodation object.",
+    "socialImportLink": "An import may record the trip it fed, and its saved places can be read back per trip. That is the whole relationship: no automatic itinerary merge."
+  },
+  "localizedArrays": "bestFor, weakFor and tags carry positionally-aligned Chinese variants. The validator checks alignment, because pickList falls back per index and a mismatch degrades into a half-Chinese line that reads as a bug.",
+  "loyaltyProgrammes": {
+    "count": 5,
+    "programmes": [
+      {
+        "id": "marriott",
+        "name": "Marriott Bonvoy",
+        "brands": 19
+      },
+      {
+        "id": "hilton",
+        "name": "Hilton Honors",
+        "brands": 13
+      },
+      {
+        "id": "ihg",
+        "name": "IHG One Rewards",
+        "brands": 13
+      },
+      {
+        "id": "hyatt",
+        "name": "World of Hyatt",
+        "brands": 13
+      },
+      {
+        "id": "gha",
+        "name": "GHA DISCOVERY",
+        "brands": 15,
+        "alliance": true
+      }
+    ],
+    "totalBrands": 73,
+    "markerSystem": "Five programmes, five head shapes and five letters (M rounded square, H circle, I hexagon, Y diamond, G shield). Colour is never the only differentiator.",
+    "ghaIsAnAlliance": "GHA DISCOVERY is a consortium, not a hotel company: its members are independently owned brands sharing one loyalty scheme. Labelled 联盟 in the filter row."
+  },
+  "coordinateAudit": {
+    "script": "scripts/verify-coords.mts",
+    "checks": [
+      "destination bounds",
+      "same-kind coordinate collisions",
+      "optional reverse geocode"
+    ],
+    "result": "652 coordinates, 0 failures, 29 expected cross-kind coincidences, 8 deliberately unlocatable",
+    "bugItFound": "73 of Bali 145 places shared a coordinate with another record, most labelled \"verified\" and carrying a coordNote that named the OTHER venue. Fixed via 73 audited corrections in lib/data/destinations/extra/coord-corrections.ts.",
+    "permanentGuard": "validate-data.ts now fails on any two same-kind records sharing a coordinate."
+  }
+}
